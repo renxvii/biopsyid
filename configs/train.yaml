@@ -9,5 +9,3 @@ learning_rate: 0.0001
 image_size: 512
 
 num_workers: 4
-
-device: cuda
