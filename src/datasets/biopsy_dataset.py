@@ -1,9 +1,10 @@
 """
-PyTorch Dataset for biopsy image segmentation.
+Dataset for biopsy image segmentation.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -13,17 +14,17 @@ from torch.utils.data import Dataset
 
 class BiopsyDataset(Dataset):
     """
-    Dataset for biopsy image segmentation.
+    Dataset for binary semantic segmentation.
 
-    Expected directory structure:
+    Directory structure:
 
     images/
-        patient001.jpg
-        patient002.jpg
+        image001.jpg
+        image002.jpg
 
     masks/
-        patient001.png
-        patient002.png
+        image001.png
+        image002.png
     """
 
     IMAGE_EXTENSIONS = {
@@ -37,21 +38,21 @@ class BiopsyDataset(Dataset):
 
     def __init__(
         self,
-        image_dir: str,
-        mask_dir: Optional[str] = None,
+        image_dir: str | Path,
+        mask_dir: str | Path,
         transform=None,
     ):
 
         self.image_dir = Path(image_dir)
-        self.mask_dir = Path(mask_dir) if mask_dir else None
+        self.mask_dir = Path(mask_dir)
 
         self.transform = transform
 
         self.images = sorted(
             [
-                file
-                for file in self.image_dir.iterdir()
-                if file.suffix.lower() in self.IMAGE_EXTENSIONS
+                p
+                for p in self.image_dir.iterdir()
+                if p.suffix.lower() in self.IMAGE_EXTENSIONS
             ]
         )
 
@@ -60,57 +61,48 @@ class BiopsyDataset(Dataset):
                 f"No images found in {self.image_dir}"
             )
 
-    def __len__(self):
-
+    def __len__(self) -> int:
         return len(self.images)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
 
         image_path = self.images[index]
 
+        mask_path = self.mask_dir / f"{image_path.stem}.png"
+
         image = cv2.imread(str(image_path))
+
+        if image is None:
+            raise RuntimeError(
+                f"Could not load {image_path}"
+            )
 
         image = cv2.cvtColor(
             image,
             cv2.COLOR_BGR2RGB,
         )
 
-        if self.mask_dir is not None:
+        mask = cv2.imread(
+            str(mask_path),
+            cv2.IMREAD_GRAYSCALE,
+        )
 
-            mask_path = (
-                self.mask_dir
-                / f"{image_path.stem}.png"
+        if mask is None:
+            raise RuntimeError(
+                f"Could not load {mask_path}"
             )
 
-            mask = cv2.imread(
-                str(mask_path),
-                cv2.IMREAD_GRAYSCALE,
-            )
+        mask = (mask > 127).astype(np.float32)
 
-            if mask is None:
-                raise FileNotFoundError(
-                    f"Mask not found: {mask_path}"
-                )
+        if self.transform is not None:
 
-            mask = (mask > 127).astype(np.float32)
-
-        else:
-
-            mask = np.zeros(
-                image.shape[:2],
-                dtype=np.float32,
-            )
-
-        if self.transform:
-
-            augmented = self.transform(
+            transformed = self.transform(
                 image=image,
                 mask=mask,
             )
 
-            image = augmented["image"]
-
-            mask = augmented["mask"]
+            image = transformed["image"]
+            mask = transformed["mask"]
 
         else:
 
@@ -127,4 +119,11 @@ class BiopsyDataset(Dataset):
                 .float()
             )
 
-        return image, mask
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(0)
+
+        return {
+            "image": image,
+            "mask": mask,
+            "filename": image_path.name,
+        }

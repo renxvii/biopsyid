@@ -31,9 +31,30 @@ def main():
 
     seed_everything()
 
-    train_cfg = load_yaml("configs/train.yaml")
-    model_cfg = load_yaml("configs/model.yaml")
-    dataset_cfg = load_yaml("configs/dataset.yaml")
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--train",
+        default="configs/train.yaml",
+    )
+
+    parser.add_argument(
+        "--model",
+        default="configs/model.yaml",
+    )
+
+    parser.add_argument(
+        "--dataset",
+        default="configs/dataset.yaml",
+    )
+
+    args = parser.parse_args()
+
+    train_cfg = load_yaml(args.train)
+    model_cfg = load_yaml(args.model)
+    dataset_cfg = load_yaml(args.dataset)
 
     device = torch.device(
         "cuda"
